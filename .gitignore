@@ -1,0 +1,19 @@
+# Teaching / learning material — not part of the deliverable
+docs/
+*.explainer.html
+
+# Node
+node_modules/
+.pnpm-store/
+client/dist/
+*.local
+
+# .NET
+bin/
+obj/
+*.user
+
+# Env
+.env
+.env.*
+!.env.example
