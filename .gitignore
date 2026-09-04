@@ -20,3 +20,6 @@ obj/
 
 # macOS
 .DS_Store
+
+# Agent instructions — reveals this is a learning project
+CLAUDE.md
