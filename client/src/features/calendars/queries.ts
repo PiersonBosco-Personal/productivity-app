@@ -11,6 +11,7 @@ export function useCalendars() {
   return useQuery({
     queryKey: calendarsKey,
     queryFn: () => api<Calendar[]>('/calendars'),
+    retry: false,
   })
 }
 

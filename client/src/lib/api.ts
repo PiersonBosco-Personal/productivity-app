@@ -11,7 +11,9 @@ export class ApiError extends Error {
 // hand is a bare string. Flatten both into one readable line.
 async function errorMessage(res: Response): Promise<string> {
   const body = await res.text()
-  if (!body) return res.statusText
+  // An empty body would otherwise surface as a bare "Not Found" with no clue
+  // which call failed.
+  if (!body) return `${res.status} ${res.statusText}`
   if (!res.headers.get('content-type')?.includes('json')) return body
 
   try {
