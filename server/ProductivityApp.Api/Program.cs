@@ -9,6 +9,10 @@ var builder = WebApplication.CreateBuilder(args);
 // --- Registration: everything the app can build. Nothing runs yet. ---
 
 builder.Services.AddControllers();
+
+// Route matching is already case-insensitive, but generated URLs are not: the
+// [controller] token would put "/api/Calendars" in a Location header.
+builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddOpenApi();
 
 // One DbContext per request. The connection string comes from user secrets in
@@ -76,3 +80,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Exposes the implicit Program class from the top-level statements above so
+// WebApplicationFactory<Program> in the test project can reach it.
+public partial class Program;

@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="ProductivityApp.Api/ProductivityApp.Api.csproj" />
+  <Project Path="ProductivityApp.Tests/ProductivityApp.Tests.csproj" />
 </Solution>
