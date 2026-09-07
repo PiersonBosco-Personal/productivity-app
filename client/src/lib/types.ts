@@ -3,3 +3,9 @@ export type User = {
   email: string
   displayName: string | null
 }
+
+export type Calendar = {
+  id: string
+  name: string
+  color: string
+}

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useLogout, useMe } from '@/features/auth/queries'
+import { CalendarList } from '@/features/calendars/CalendarList'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -23,7 +24,8 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl p-6">
+      <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-[260px_1fr]">
+        <CalendarList />
         <div className="rounded-lg border border-dashed p-16 text-center text-sm text-muted-foreground">
           Calendar goes here.
         </div>

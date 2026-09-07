@@ -7,6 +7,22 @@ export class ApiError extends Error {
   }
 }
 
+// Failed validation comes back as ProblemDetails JSON; everything we throw by
+// hand is a bare string. Flatten both into one readable line.
+async function errorMessage(res: Response): Promise<string> {
+  const body = await res.text()
+  if (!body) return res.statusText
+  if (!res.headers.get('content-type')?.includes('json')) return body
+
+  try {
+    const problem = JSON.parse(body) as { title?: string; errors?: Record<string, string[]> }
+    const fields = Object.values(problem.errors ?? {}).flat()
+    return fields.join(' ') || problem.title || body
+  } catch {
+    return body
+  }
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     // Sends the auth cookie. Same-origin thanks to the Vite proxy, so nothing else is needed.
@@ -16,10 +32,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!res.ok) {
-    // The API returns bare strings for errors, so this reads as a clean message.
-    const message = await res.text()
-    throw new ApiError(res.status, message || res.statusText)
+    throw new ApiError(res.status, await errorMessage(res))
   }
-  // 204 from logout has no body to parse.
+  // 204 from logout, update and delete has no body to parse.
   return res.status === 204 ? (undefined as T) : res.json()
 }
