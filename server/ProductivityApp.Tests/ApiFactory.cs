@@ -80,3 +80,13 @@ public class ApiCollection : ICollectionFixture<ApiFactory>;
 public record UserDto(Guid Id, string Email, string? DisplayName);
 
 public record CalendarDto(Guid Id, string Name, string Color);
+
+public record EventDto(
+    Guid Id,
+    Guid CalendarId,
+    string Title,
+    string? Description,
+    string? Location,
+    DateTime StartsAtUtc,
+    DateTime EndsAtUtc,
+    bool IsAllDay);
