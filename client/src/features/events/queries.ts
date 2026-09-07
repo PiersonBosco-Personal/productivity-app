@@ -1,26 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { weekWindow } from '@/lib/datetime'
 import type { CalendarEvent } from '@/lib/types'
 
-// Every mutation invalidates this prefix, which matches every cached window.
+// Every mutation invalidates this prefix, which matches every cached week.
 const eventsKey = ['events']
 
-type EventDraft = {
+// The fields the API accepts on create and update — its EventRequest DTO.
+export type EventDraft = {
   calendarId: string
   title: string
+  description: string | null
+  location: string | null
   startsAtUtc: string
   endsAtUtc: string
   isAllDay: boolean
 }
 
-export function useEvents(from: Date, to: Date, calendarId?: string) {
-  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })
-  if (calendarId) params.set('calendarId', calendarId)
-  const query = params.toString()
+// One week is one window. The visible-calendar filter is deliberately NOT part
+// of the request: the API's ?calendarId= takes a single id and cannot express
+// "these three", and fetching the whole week makes toggling free.
+export function useWeekEvents(weekStart: Date) {
+  const { from, to } = weekWindow(weekStart)
+  const query = new URLSearchParams({ from, to }).toString()
 
   return useQuery({
-    // The window is part of the key, so paging back a week is a separate entry
-    // and returning to this one is instant.
+    // The window is in the key, so paging back to a week already seen is instant.
     queryKey: [...eventsKey, query],
     queryFn: () => api<CalendarEvent[]>(`/events?${query}`),
     // A 4xx will not fix itself, so do not hammer the endpoint three more times.

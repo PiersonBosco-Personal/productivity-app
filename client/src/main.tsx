@@ -5,7 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { RegisterPage } from '@/features/auth/RegisterPage'
 import { RequireAuth } from '@/features/auth/RequireAuth'
-import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { CalendarPage } from '@/features/calendar/CalendarPage'
 import './index.css'
 
 const queryClient = new QueryClient()
@@ -21,7 +21,7 @@ createRoot(document.getElementById('root')!).render(
             path="/"
             element={
               <RequireAuth>
-                <DashboardPage />
+                <CalendarPage />
               </RequireAuth>
             }
           />
