@@ -1,3 +1,4 @@
+import { Repeat } from 'lucide-react'
 import { fmtTime, minutesOf } from '@/lib/datetime'
 import type { CalendarEvent } from '@/lib/types'
 
@@ -36,7 +37,13 @@ export function EventRow({
     >
       <span className="w-[3px] shrink-0 rounded-sm" style={{ background: color }} />
       <span className="min-w-0 flex-1 py-px">
-        <span className="tnum block text-[12.5px] text-muted-foreground">{time}</span>
+        <span className="tnum block text-[12.5px] text-muted-foreground">
+          {time}
+          {/* One glyph is enough: the detail sheet spells the rule out. */}
+          {event.recurrenceFreq && (
+            <Repeat className="ml-1 inline size-[11px] align-[-1px] text-subtle" strokeWidth={2.4} />
+          )}
+        </span>
         <span className="block truncate text-base leading-[1.32] tracking-[-0.011em]">
           {event.title}
         </span>

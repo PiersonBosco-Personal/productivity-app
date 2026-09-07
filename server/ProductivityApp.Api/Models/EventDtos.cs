@@ -82,6 +82,10 @@ public class EventRequest : IValidatableObject
 // Every occurrence of a series carries the series' own id, so a client keys a
 // row on (id, startsAtUtc). That pair is also what an override will be filed
 // under once single-occurrence edits exist.
+//
+// SeriesStartsAtUtc is the stored row's own start — the first occurrence. An
+// editor needs it to change a series without moving it to whichever occurrence
+// happened to be on screen. On a one-off it is just StartsAtUtc.
 public record EventResponse(
     Guid Id,
     Guid CalendarId,
@@ -93,12 +97,13 @@ public record EventResponse(
     bool IsAllDay,
     RecurrenceFreq? RecurrenceFreq,
     int RecurrenceInterval,
-    DateTime? RecurrenceUntilUtc)
+    DateTime? RecurrenceUntilUtc,
+    DateTime SeriesStartsAtUtc)
 {
     // One mapping for both a stored row and an expanded occurrence: the
     // occurrence overrides only the two times.
     public static EventResponse From(Event e, DateTime? startsAtUtc = null, DateTime? endsAtUtc = null) =>
         new(e.Id, e.CalendarId, e.Title, e.Description, e.Location,
             startsAtUtc ?? e.StartsAtUtc, endsAtUtc ?? e.EndsAtUtc, e.IsAllDay,
-            e.RecurrenceFreq, e.RecurrenceInterval, e.RecurrenceUntilUtc);
+            e.RecurrenceFreq, e.RecurrenceInterval, e.RecurrenceUntilUtc, e.StartsAtUtc);
 }

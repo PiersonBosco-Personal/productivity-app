@@ -1,3 +1,4 @@
+import { Repeat } from 'lucide-react'
 import { withAlpha } from '@/lib/colors'
 import type { CalendarEvent } from '@/lib/types'
 
@@ -25,6 +26,7 @@ export function AllDayBand({
       style={{ background: withAlpha(color, 'var(--band-alpha)'), color }}
     >
       {!first && <span className="-mr-0.5 text-xs opacity-55">←</span>}
+      {event.recurrenceFreq && <Repeat className="size-[11px] shrink-0 opacity-70" strokeWidth={2.4} />}
       <span className="min-w-0 flex-1 truncate">{event.title}</span>
       {!last && <span className="text-xs opacity-55">→</span>}
     </button>

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { weekWindow } from '@/lib/datetime'
-import type { CalendarEvent } from '@/lib/types'
+import type { CalendarEvent, RecurrenceFreq } from '@/lib/types'
 
 // Every mutation invalidates this prefix, which matches every cached week.
 const eventsKey = ['events']
@@ -15,6 +15,11 @@ export type EventDraft = {
   startsAtUtc: string
   endsAtUtc: string
   isAllDay: boolean
+  recurrenceFreq: RecurrenceFreq | null
+  recurrenceInterval: number
+  // Exclusive, like every other end in this app: an occurrence starting exactly
+  // here is not part of the series.
+  recurrenceUntilUtc: string | null
 }
 
 // One week is one window. The visible-calendar filter is deliberately NOT part

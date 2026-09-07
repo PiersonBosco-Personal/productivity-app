@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Check, ChevronRight, Clock, MapPin, Plus, Text } from 'lucide-react'
+import { Check, ChevronRight, Clock, MapPin, Plus, Repeat, Text } from 'lucide-react'
 import { Sheet, SheetBody, SheetHeader } from '@/components/Sheet'
 import { DatePicker } from './DatePicker'
 import { TimePicker } from './TimePicker'
@@ -9,9 +9,10 @@ import type { EventDraft } from './queries'
 import {
   addDays, combine, fmtDuration, fmtTime, minutesOf, shortDate, startOfDay,
 } from '@/lib/datetime'
-import type { Calendar, CalendarEvent } from '@/lib/types'
+import { REPEATS, repeatLabel } from '@/lib/recurrence'
+import type { Calendar, CalendarEvent, RecurrenceFreq } from '@/lib/types'
 
-type Row = 'sdate' | 'stime' | 'edate' | 'etime' | 'cal' | 'more' | null
+type Row = 'sdate' | 'stime' | 'edate' | 'etime' | 'cal' | 'rep' | 'until' | 'more' | null
 
 type Draft = {
   title: string
@@ -23,12 +24,20 @@ type Draft = {
   endMin: number
   location: string
   description: string
+  freq: RecurrenceFreq | null
+  interval: number
+  // The last day an occurrence may fall on, or null for a series with no end.
+  until: Date | null
 }
 
 function draftFrom(event: CalendarEvent | undefined, calendars: Calendar[], today: Date): Draft {
   if (event) {
-    const s = new Date(event.startsAtUtc)
-    const e = new Date(event.endsAtUtc)
+    // A repeating event is edited as a whole series, so the sheet shows where
+    // the series starts rather than the occurrence that was tapped. Sending an
+    // occurrence's date back would drag the whole series forward onto it.
+    const s = new Date(event.recurrenceFreq ? event.seriesStartsAtUtc : event.startsAtUtc)
+    // Every occurrence is the same length, so the end follows from the duration.
+    const e = new Date(+s + (+new Date(event.endsAtUtc) - +new Date(event.startsAtUtc)))
     return {
       title: event.title,
       calendarId: event.calendarId,
@@ -40,6 +49,12 @@ function draftFrom(event: CalendarEvent | undefined, calendars: Calendar[], toda
       endMin: event.isAllDay ? 600 : minutesOf(e),
       location: event.location ?? '',
       description: event.description ?? '',
+      freq: event.recurrenceFreq,
+      interval: event.recurrenceInterval,
+      // Until is exclusive, so the last day it allows is a millisecond back.
+      until: event.recurrenceUntilUtc
+        ? startOfDay(new Date(new Date(event.recurrenceUntilUtc).getTime() - 1))
+        : null,
     }
   }
   const now = new Date()
@@ -54,6 +69,9 @@ function draftFrom(event: CalendarEvent | undefined, calendars: Calendar[], toda
     endMin: rounded + 60,
     location: '',
     description: '',
+    freq: null,
+    interval: 1,
+    until: null,
   }
 }
 
@@ -113,6 +131,12 @@ export function EventSheet({
         ? addDays(startOfDay(draft.endDay), 1).toISOString()
         : combine(draft.endDay, draft.endMin).toISOString(),
       isAllDay: draft.allDay,
+      recurrenceFreq: draft.freq,
+      recurrenceInterval: draft.interval,
+      // The picker names the last day that may hold an occurrence; the API's
+      // Until is exclusive, so it becomes the midnight after that day.
+      recurrenceUntilUtc:
+        draft.freq && draft.until ? addDays(startOfDay(draft.until), 1).toISOString() : null,
     }
     const done = { onSuccess: onClose }
     if (event) update.mutate({ id: event.id, ...body }, done)
@@ -120,7 +144,11 @@ export function EventSheet({
   }
 
   const error = create.error ?? update.error
-  const invalid = !draft.allDay && durationMins <= 0
+  // A repeat ending before the series begins would contain nothing at all, and
+  // the API rejects it. Catch it here so Save cannot produce a 400.
+  const untilTooEarly =
+    !!draft.freq && !!draft.until && +startOfDay(draft.until) < +startOfDay(draft.startDay)
+  const invalid = (!draft.allDay && durationMins <= 0) || untilTooEarly
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -169,7 +197,7 @@ export function EventSheet({
           <DatePicker value={draft.startDay} today={today} onChange={setStartDay} />
         </Collapse>
         <Collapse open={row === 'stime'}>
-          <TimePicker value={draft.startMin} onChange={setStartMin} />
+          <TimePicker value={draft.startMin} open={row === 'stime'} onChange={setStartMin} />
         </Collapse>
 
         <TimeRow
@@ -187,6 +215,7 @@ export function EventSheet({
         <Collapse open={row === 'etime'}>
           <TimePicker
             value={draft.endMin}
+            open={row === 'etime'}
             onChange={(mins) => patch({ endMin: mins })}
             // Anything at or before the start is unreachable, which is what keeps
             // ck_events_end_after_start from ever being tripped by this UI.
@@ -232,6 +261,83 @@ export function EventSheet({
 
         <button
           type="button"
+          onClick={() => toggle('rep')}
+          className="flex w-full items-center gap-3 border-b border-border py-3 text-left"
+        >
+          <Repeat className="size-[17px] shrink-0 text-subtle" />
+          <span className="w-[52px] text-sm text-muted-foreground">Repeat</span>
+          <span className="ml-auto text-[15px]">{repeatLabel(draft.freq, draft.interval)}</span>
+          <ChevronRight className="size-[15px] shrink-0 text-subtle" />
+        </button>
+        <Collapse open={row === 'rep'}>
+          <div className="pb-2.5">
+            {REPEATS.map((r) => (
+              <button
+                key={r.label}
+                type="button"
+                onClick={() => {
+                  // Dropping the repeat drops its end date with it, so a series
+                  // turned back into a one-off cannot leave a stale Until behind.
+                  patch({ freq: r.freq, interval: r.interval, until: r.freq ? draft.until : null })
+                  setRow(null)
+                }}
+                className="flex w-full items-center gap-3 py-2.5 text-left"
+              >
+                <span className="text-[15px]">{r.label}</span>
+                {draft.freq === r.freq && draft.interval === r.interval && (
+                  <Check className="ml-auto size-[15px]" strokeWidth={3} />
+                )}
+              </button>
+            ))}
+          </div>
+        </Collapse>
+
+        {draft.freq && (
+          <>
+            <button
+              type="button"
+              onClick={() => toggle('until')}
+              className="flex w-full items-center gap-3 border-b border-border py-3 text-left"
+            >
+              <span className="w-[17px] shrink-0" />
+              <span className="w-[52px] text-sm text-muted-foreground">Until</span>
+              <span className={`ml-auto text-[15px] ${untilTooEarly ? 'text-destructive' : ''}`}>
+                {draft.until ? shortDate(draft.until) : 'Forever'}
+              </span>
+              <ChevronRight className="size-[15px] shrink-0 text-subtle" />
+            </button>
+            <Collapse open={row === 'until'}>
+              <div className="pb-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    patch({ until: null })
+                    setRow(null)
+                  }}
+                  className="flex w-full items-center gap-3 py-2.5 text-left"
+                >
+                  <span className="text-[15px]">Forever</span>
+                  {!draft.until && <Check className="ml-auto size-[15px]" strokeWidth={3} />}
+                </button>
+                {/* The picker names the last day that may hold an occurrence. */}
+                <DatePicker
+                  value={draft.until ?? draft.startDay}
+                  today={today}
+                  onChange={(d) => patch({ until: d })}
+                />
+              </div>
+            </Collapse>
+          </>
+        )}
+
+        {event?.recurrenceFreq && (
+          <p className="pt-2.5 text-[12.5px] leading-[1.45] text-subtle">
+            Changes apply to every occurrence of this event.
+          </p>
+        )}
+
+        <button
+          type="button"
           onClick={() => toggle('more')}
           className="flex w-full items-center gap-3 border-b border-border py-3 text-left"
         >
@@ -263,6 +369,11 @@ export function EventSheet({
           </div>
         </Collapse>
 
+        {untilTooEarly && (
+          <p className="pt-3 text-sm text-destructive">
+            The repeat ends before the event starts.
+          </p>
+        )}
         {error && <p className="pt-3 text-sm text-destructive">{error.message}</p>}
         {calendars.length === 0 && (
           <p className="pt-3 text-sm text-destructive">Create a calendar before adding events.</p>

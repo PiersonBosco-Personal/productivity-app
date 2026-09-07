@@ -4,7 +4,8 @@
 import { addDays, startOfDay } from '../../lib/datetime.ts'
 
 // Structural, not imported from lib/types, so this module stays alias-free.
-// Matches CalendarEvent field for field.
+// The subset of CalendarEvent bucketing needs: an occurrence of a repeating
+// event is placed by its own times like any other row.
 export type WeekEvent = {
   id: string
   calendarId: string

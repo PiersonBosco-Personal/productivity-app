@@ -1,7 +1,8 @@
-import { Calendar as CalendarIcon, MapPin } from 'lucide-react'
+import { Calendar as CalendarIcon, MapPin, Repeat } from 'lucide-react'
 import { Sheet, SheetBody } from '@/components/Sheet'
 import { useDeleteEvent } from './queries'
 import { fmtDuration, fmtTime, longDate, minutesOf, shortDate, startOfDay } from '@/lib/datetime'
+import { repeatLabel } from '@/lib/recurrence'
 import type { Calendar, CalendarEvent } from '@/lib/types'
 
 // Read-only by design. Reading an event is the common case, and this keeps an
@@ -26,6 +27,11 @@ export function EventDetailSheet({
   const lastDay = startOfDay(new Date(ends.getTime() - 1))
   const crossesDays = +lastDay > +startOfDay(starts)
   const duration = fmtDuration(Math.round((+ends - +starts) / 6e4))
+
+  // Also exclusive, so the last day the series can reach is a millisecond back.
+  const repeatsUntil = event.recurrenceUntilUtc
+    ? startOfDay(new Date(new Date(event.recurrenceUntilUtc).getTime() - 1))
+    : null
 
   const when =
     event.isAllDay && crossesDays ? `${longDate(starts)} – ${longDate(lastDay)}` : longDate(starts)
@@ -58,6 +64,16 @@ export function EventDetailSheet({
           {calendar?.name ?? 'Unknown calendar'}
         </div>
 
+        {event.recurrenceFreq && (
+          <div className="flex items-center gap-2.5 border-t border-border py-2.5 text-[14.5px]">
+            <Repeat className="size-4 shrink-0 text-subtle" />
+            {repeatLabel(event.recurrenceFreq, event.recurrenceInterval)}
+            {repeatsUntil && (
+              <span className="text-muted-foreground">until {shortDate(repeatsUntil)}</span>
+            )}
+          </div>
+        )}
+
         {event.location && (
           <div className="flex items-center gap-2.5 border-t border-border py-2.5 text-[14.5px]">
             <MapPin className="size-4 shrink-0 text-subtle" />
@@ -89,7 +105,8 @@ export function EventDetailSheet({
           onClick={() => remove.mutate(event.id, { onSuccess: onClose })}
           className="flex-1 rounded-xl py-3 text-[14.5px] font-medium text-destructive disabled:opacity-50"
         >
-          Delete
+          {/* Deleting reaches the whole series: one row is all there is. */}
+          {event.recurrenceFreq ? 'Delete series' : 'Delete'}
         </button>
       </div>
     </Sheet>

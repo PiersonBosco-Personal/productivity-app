@@ -10,11 +10,15 @@ const MERIDIEMS: Meridiem[] = ['AM', 'PM']
 // centred on its current value, so most edits need no scrolling at all.
 export function TimePicker({
   value,
+  open,
   onChange,
   allows,
   hint,
 }: {
   value: number
+  // The row this sits in stays mounted while collapsed, so the picker has to be
+  // told when it comes back into view. See the effect in Column.
+  open: boolean
   onChange: (minutes: number) => void
   // Lets the Ends picker grey out anything at or before the start. Given the
   // other two columns' current values, is this candidate reachable?
@@ -33,6 +37,7 @@ export function TimePicker({
         <Column
           items={HOURS}
           current={h}
+          open={open}
           label={(x) => String(x)}
           build={(x) => toMinutes(x, m, ap)}
           allows={allows}
@@ -41,6 +46,7 @@ export function TimePicker({
         <Column
           items={MINUTES}
           current={m}
+          open={open}
           label={(x) => `:${String(x).padStart(2, '0')}`}
           build={(x) => toMinutes(h, x, ap)}
           allows={allows}
@@ -49,6 +55,7 @@ export function TimePicker({
         <Column
           items={MERIDIEMS}
           current={ap}
+          open={open}
           label={(x) => x}
           build={(x) => toMinutes(h, m, x)}
           allows={allows}
@@ -64,6 +71,7 @@ export function TimePicker({
 function Column<T extends string | number>({
   items,
   current,
+  open,
   label,
   build,
   allows,
@@ -71,6 +79,7 @@ function Column<T extends string | number>({
 }: {
   items: readonly T[]
   current: T
+  open: boolean
   label: (item: T) => string
   build: (item: T) => number
   allows?: (minutes: number) => boolean
@@ -79,19 +88,25 @@ function Column<T extends string | number>({
   const ref = useRef<HTMLDivElement>(null)
   const selectedIndex = items.indexOf(current)
 
-  // Open centred on the current value. Assigning scrollTop directly rather than
-  // scrollIntoView keeps it from scrolling the sheet behind it too.
+  // Centre the current value on every open, not just on mount: the row is only
+  // collapsed, never unmounted, so a column left scrolled somewhere else would
+  // come back exactly as it was rather than on the chosen time. Assigning
+  // scrollTop directly rather than scrollIntoView keeps it from scrolling the
+  // sheet behind it too — offsetTop is read against this column, which is what
+  // the "relative" below is for.
   useEffect(() => {
     const el = ref.current
     const child = el?.children[selectedIndex] as HTMLElement | undefined
-    if (!el || !child) return
+    if (!open || !el || !child) return
     el.scrollTop = Math.max(0, child.offsetTop - el.clientHeight / 2 + child.offsetHeight / 2)
-  }, [selectedIndex])
+  }, [open, selectedIndex])
 
   return (
     <div
       ref={ref}
-      className="min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      // Positioned so the buttons' offsetTop is measured from this column and
+      // not from whatever ancestor happens to be positioned above the sheet.
+      className="relative min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {items.map((item) => {
         const minutes = build(item)

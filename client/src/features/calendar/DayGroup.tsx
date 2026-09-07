@@ -33,9 +33,12 @@ export function DayGroup({
         {bare && <span className="font-normal normal-case tracking-normal text-subtle/55">—</span>}
       </div>
 
+      {/* Every occurrence of a series carries the same id, so the id alone is
+          not unique within a day: an event that crosses midnight and repeats
+          daily puts two of them here. The start is what separates them. */}
       {allDay.map(({ event, first, last }) => (
         <AllDayBand
-          key={event.id}
+          key={`${event.id}-${event.startsAtUtc}`}
           event={event}
           color={colorOf(event.calendarId)}
           first={first}
@@ -46,7 +49,7 @@ export function DayGroup({
 
       {timed.map(({ event, first, last }) => (
         <EventRow
-          key={event.id}
+          key={`${event.id}-${event.startsAtUtc}`}
           event={event}
           color={colorOf(event.calendarId)}
           first={first}

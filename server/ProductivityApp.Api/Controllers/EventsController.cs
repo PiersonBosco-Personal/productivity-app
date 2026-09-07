@@ -24,7 +24,7 @@ public class EventsController(
         e => new EventResponse(
             e.Id, e.CalendarId, e.Title, e.Description, e.Location,
             e.StartsAtUtc, e.EndsAtUtc, e.IsAllDay,
-            e.RecurrenceFreq, e.RecurrenceInterval, e.RecurrenceUntilUtc);
+            e.RecurrenceFreq, e.RecurrenceInterval, e.RecurrenceUntilUtc, e.StartsAtUtc);
 
     // GET /api/events?from=…&to=…&calendarId=…
     // DateTimeOffset rather than DateTime: it forces the caller to say what zone
