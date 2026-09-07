@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProductivityApp.Api.Data;
 using ProductivityApp.Api.Models;
+using ProductivityApp.Api.Services;
 
 namespace ProductivityApp.Api.Controllers;
 
@@ -22,7 +23,8 @@ public class EventsController(
     private static readonly Expression<Func<Event, EventResponse>> ToResponse =
         e => new EventResponse(
             e.Id, e.CalendarId, e.Title, e.Description, e.Location,
-            e.StartsAtUtc, e.EndsAtUtc, e.IsAllDay);
+            e.StartsAtUtc, e.EndsAtUtc, e.IsAllDay,
+            e.RecurrenceFreq, e.RecurrenceInterval, e.RecurrenceUntilUtc);
 
     // GET /api/events?from=…&to=…&calendarId=…
     // DateTimeOffset rather than DateTime: it forces the caller to say what zone
@@ -39,21 +41,42 @@ public class EventsController(
             return BadRequest("'to' must be after 'from'.");
         }
 
+        // Every recurring series is expanded on each request, so an unbounded
+        // window is an unbounded amount of work. No calendar view needs a year.
+        if (to - from > TimeSpan.FromDays(366))
+        {
+            return BadRequest("The window must be 366 days or less.");
+        }
+
         var userId = CurrentUserId;
         var fromUtc = from.UtcDateTime;
         var toUtc = to.UtcDateTime;
 
-        return await db.Events
+        // One query for both kinds. A one-off is filtered on its own overlap; a
+        // series only on whether it can still be running, because its stored end
+        // belongs to the first occurrence, not the last.
+        // The series test uses the start bound only, so a series whose final
+        // occurrence starts before Until but ends after the window opens is
+        // missed. Compare against Until plus the duration if that ever matters.
+        var rows = await db.Events
             .AsNoTracking()
             // Reaching through the navigation property becomes a join to calendars.
             .Where(e => e.Calendar.UserId == userId)
             .Where(e => calendarId == null || e.CalendarId == calendarId)
-            // Overlap, not containment: anything touching the window counts. Both
-            // comparisons are strict because the end is exclusive.
-            .Where(e => e.StartsAtUtc < toUtc && e.EndsAtUtc > fromUtc)
-            .OrderBy(e => e.StartsAtUtc)
-            .Select(ToResponse)
+            .Where(e => e.RecurrenceFreq == null
+                // Overlap, not containment: anything touching the window counts.
+                // Both comparisons are strict because the end is exclusive.
+                ? e.StartsAtUtc < toUtc && e.EndsAtUtc > fromUtc
+                : e.StartsAtUtc < toUtc
+                    && (e.RecurrenceUntilUtc == null || e.RecurrenceUntilUtc > fromUtc))
             .ToListAsync();
+
+        // Expand yields the row itself when it is not a series, so both kinds
+        // come out of the same pipe.
+        return rows
+            .SelectMany(e => RecurrenceExpander.Expand(e, fromUtc, toUtc))
+            .OrderBy(e => e.StartsAtUtc)
+            .ToList();
     }
 
     [HttpGet("{id:guid}")]
@@ -92,14 +115,15 @@ public class EventsController(
             StartsAtUtc = request.StartsAtUtc,
             EndsAtUtc = request.EndsAtUtc,
             IsAllDay = request.IsAllDay,
+            RecurrenceFreq = request.RecurrenceFreq,
+            RecurrenceInterval = request.RecurrenceInterval,
+            RecurrenceUntilUtc = request.RecurrenceUntilUtc,
         };
 
         db.Events.Add(@event);
         await db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetById), new { id = @event.Id }, new EventResponse(
-            @event.Id, @event.CalendarId, @event.Title, @event.Description, @event.Location,
-            @event.StartsAtUtc, @event.EndsAtUtc, @event.IsAllDay));
+        return CreatedAtAction(nameof(GetById), new { id = @event.Id }, EventResponse.From(@event));
     }
 
     [HttpPut("{id:guid}")]
@@ -128,6 +152,9 @@ public class EventsController(
         @event.StartsAtUtc = request.StartsAtUtc;
         @event.EndsAtUtc = request.EndsAtUtc;
         @event.IsAllDay = request.IsAllDay;
+        @event.RecurrenceFreq = request.RecurrenceFreq;
+        @event.RecurrenceInterval = request.RecurrenceInterval;
+        @event.RecurrenceUntilUtc = request.RecurrenceUntilUtc;
 
         await db.SaveChangesAsync();
 

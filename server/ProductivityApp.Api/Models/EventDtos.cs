@@ -23,6 +23,13 @@ public class EventRequest : IValidatableObject
 
     public bool IsAllDay { get; set; }
 
+    // Null keeps the event a one-off. The other two are ignored when it is null.
+    public RecurrenceFreq? RecurrenceFreq { get; set; }
+
+    public int RecurrenceInterval { get; set; } = 1;
+
+    public DateTime? RecurrenceUntilUtc { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         // A time without a "Z" deserializes as Unspecified, which Npgsql refuses
@@ -41,9 +48,40 @@ public class EventRequest : IValidatableObject
                 "The end must be after the start.",
                 [nameof(EndsAtUtc)]);
         }
+
+        // Mirrors ck_events_recurrence_interval_positive. A zero interval would
+        // make the expander loop forever on the same instant.
+        if (RecurrenceInterval < 1)
+        {
+            yield return new ValidationResult(
+                "The repeat interval must be at least 1.",
+                [nameof(RecurrenceInterval)]);
+        }
+
+        if (RecurrenceUntilUtc is { } until)
+        {
+            if (until.Kind != DateTimeKind.Utc)
+            {
+                yield return new ValidationResult(
+                    "Times must be UTC and end in 'Z'.",
+                    [nameof(RecurrenceUntilUtc)]);
+            }
+
+            // Until is exclusive, so it has to clear the first occurrence's
+            // start or the series would contain nothing at all.
+            if (until <= StartsAtUtc)
+            {
+                yield return new ValidationResult(
+                    "The repeat end must be after the start.",
+                    [nameof(RecurrenceUntilUtc)]);
+            }
+        }
     }
 }
 
+// Every occurrence of a series carries the series' own id, so a client keys a
+// row on (id, startsAtUtc). That pair is also what an override will be filed
+// under once single-occurrence edits exist.
 public record EventResponse(
     Guid Id,
     Guid CalendarId,
@@ -52,4 +90,15 @@ public record EventResponse(
     string? Location,
     DateTime StartsAtUtc,
     DateTime EndsAtUtc,
-    bool IsAllDay);
+    bool IsAllDay,
+    RecurrenceFreq? RecurrenceFreq,
+    int RecurrenceInterval,
+    DateTime? RecurrenceUntilUtc)
+{
+    // One mapping for both a stored row and an expanded occurrence: the
+    // occurrence overrides only the two times.
+    public static EventResponse From(Event e, DateTime? startsAtUtc = null, DateTime? endsAtUtc = null) =>
+        new(e.Id, e.CalendarId, e.Title, e.Description, e.Location,
+            startsAtUtc ?? e.StartsAtUtc, endsAtUtc ?? e.EndsAtUtc, e.IsAllDay,
+            e.RecurrenceFreq, e.RecurrenceInterval, e.RecurrenceUntilUtc);
+}

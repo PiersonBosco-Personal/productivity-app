@@ -3,6 +3,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ProductivityApp.Api.Models;
 
+// Only what a calendar UI actually offers a button for. Anything richer
+// ("every third Thursday") needs a real RRULE parser; this is not one.
+public enum RecurrenceFreq
+{
+    Daily,
+    Weekly,
+    Monthly,
+}
+
 // Every query is "events in these calendars, in this window", so the composite
 // index matches that shape rather than indexing the two columns separately.
 [Index(nameof(CalendarId), nameof(StartsAtUtc))]
@@ -33,4 +42,15 @@ public class Event
 
     // Stored as UTC midnight to UTC midnight. Only changes how it is rendered.
     public bool IsAllDay { get; set; }
+
+    // Null means a one-off. When set, this row is the whole series: only the
+    // first occurrence is stored, the rest are expanded on read.
+    public RecurrenceFreq? RecurrenceFreq { get; set; }
+
+    // Every interval-th day/week/month. 1 unless the user wants "every other".
+    public int RecurrenceInterval { get; set; } = 1;
+
+    // Exclusive, like every other end in this schema: an occurrence starting
+    // exactly here is not part of the series. Null repeats forever.
+    public DateTime? RecurrenceUntilUtc { get; set; }
 }

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // --- Registration: everything the app can build. Nothing runs yet. ---
 
-builder.Services.AddControllers();
+// Enums cross the wire as their names ("Weekly"), not their ordinals, which is
+// what the database stores too. Without this, System.Text.Json uses numbers.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // Route matching is already case-insensitive, but generated URLs are not: the
 // [controller] token would put "/api/Calendars" in a Location header.
